@@ -1,14 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Visibility Limit Plugin
+Visibility Limit Plugin v1.0.1
 
 This plugin limits the current visibility basing on Wind speed and the difference between the temperature and the dew point.
-
-This file is released under the GNU GPL v2 licence.
-
-Author: Claudio Nicolotti - https://github.com/nico87/
-
-If you want to update this plugin or create your own fork please visit https://github.com/nico87/xp-plugins-windpressure
 """
 
 from XPLMDefs import *
@@ -17,6 +11,7 @@ from XPLMGraphics import *
 from XPLMProcessing import *
 from XPLMDataAccess import *
 from XPLMUtilities import *
+from SandyBarbourUtilities import *
 
 HIGH_MAX_VIS = 50000.0		    # meters at high altitude (float)
 NORMAL_MAX_VIS = 30000.0		# meters in normal conditions (float)
@@ -35,15 +30,16 @@ class PythonInterface:
         """
         First we must fill in the passed in buffers to describe our
         plugin to the plugin-system."""
-        self.Name = "WindPressure"
+        self.Name = "VisibilityLimitPlugin"
         self.Sig = "aimappy.xplane.PythonVisibilityLimit"
         self.Desc = "A plugin that limits the current visibility basing on Wind speed and the difference between the temperature and the dew point."
+        self.RealWeatherDataRef = XPLMFindDataRef("sim/weather/use_real_weather_bool")
         self.VisibilityDataRef = XPLMFindDataRef("sim/weather/visibility_reported_m")
-        self.WindDirDataRef = XPLMFindDataRef("sim/weather/wind_direction_degt")
-        self.WindSpeedDataRef = XPLMFindDataRef("sim/weather/wind_speed_kt")
         self.TemperatureSL = XPLMFindDataRef("sim/weather/temperature_sealevel_c")
         self.DewPointSL = XPLMFindDataRef("sim/weather/dewpoi_sealevel_c")
-        self.elevation = XPLMFindDataRef("sim/flightmodel/position/elevation")
+        self.ElevatioDataRef = XPLMFindDataRef("sim/flightmodel/position/elevation")
+        self.SetWeather = 0
+        self.AutoWeather = 0
 
         self.FlightLoopCB = self.FlightLoopCallback
         XPLMRegisterFlightLoopCallback(self, self.FlightLoopCB, 1.0, 0)
@@ -87,15 +83,34 @@ class PythonInterface:
 
     def FlightLoopCallback(self, elapsedMe, elapsedSim, counter, refcon):
         visibility = XPLMGetDataf(self.VisibilityDataRef)
-        maxVis = HIGH_MAX_VIS
-        diff = XPLMGetDatai(self.TemperatureSL) - XPLMGetDatai(self.DewPointSL)
-        elev = XPLMGetDatad(self.elevation) / 0.3
+        diff = XPLMGetDataf(self.TemperatureSL) - XPLMGetDataf(self.DewPointSL)
+        elev = XPLMGetDataf(self.ElevatioDataRef) / 0.3
         if (elev < 8000):
             if (diff < 5):
                 maxVis = LOW_DPRATIO_VIS
             elif (diff < 10):
                 maxVis = MEDIUM_DPRATIO_VIS
+            else:
+                maxVis = NORMAL_MAX_VIS
+        else:
+            if (diff < 5):
+                maxVis = NORMAL_DPRATIO_VIS
+            else:
+                maxVis = HIGH_MAX_VIS
         if (visibility > maxVis):
+            # Keep track of the auto weather setting
+            self.AutoWeather = XPLMGetDatai(self.RealWeatherDataRef)
+            SandyBarbourPrint(self.Name + ": Vis. was " + str(visibility) + "m -> set it to " + str(maxVis) + "m (diff was " + str(diff) + "°C and elev was " + str(elev) + "feet)")
             XPLMSetDataf(self.VisibilityDataRef, maxVis)
+            self.SetWeather = 1
+            # Setting the visibility disables the auto weather.
+            # We can't set the auto weather to on here. We must wait the next loop.
+            # Return 1.0 to indicate that we want to be called again in 1 second.
+            return 1.0
+        if (self.SetWeather == 1 and self.AutoWeather == 1):
+            SandyBarbourPrint(self.Name + ": autoweather re-enabled")
+            # Reset the auto weather setting
+            XPLMSetDatai(self.RealWeatherDataRef, 1)
+            self.SetWeather = 0
         # Return 1.0 to indicate that we want to be called again in 1 second.
         return 1.0

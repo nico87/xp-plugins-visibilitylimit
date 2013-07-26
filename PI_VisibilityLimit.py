@@ -15,8 +15,8 @@ from SandyBarbourUtilities import *
 
 HIGH_MAX_VIS = 50000.0		    # meters at high altitude (float)
 NORMAL_MAX_VIS = 30000.0		# meters in normal conditions (float)
-MEDIUM_DPRATIO_VIS = 21000.0    # meters when difference between temp and dp is less than 10
 LOW_DPRATIO_VIS = 18000.0       # meters when difference between temp and dp is less than 5
+TRANSITION = 8000               # transition altitude between HIGH and LOW levels (feet)
 
 
 class PythonInterface:
@@ -38,6 +38,7 @@ class PythonInterface:
         self.TemperatureSL = XPLMFindDataRef("sim/weather/temperature_sealevel_c")
         self.DewPointSL = XPLMFindDataRef("sim/weather/dewpoi_sealevel_c")
         self.ElevatioDataRef = XPLMFindDataRef("sim/flightmodel/position/elevation")
+        self.LastVisibility = -1
         self.SetWeather = 0
         self.AutoWeather = 0
 
@@ -81,27 +82,28 @@ class PythonInterface:
     def XPluginReceiveMessage(self, inFromWho, inMessage, inParam):
         pass
 
+    def calculateVisibility(self, minVisibility, maxVisibility, temp, dp):
+        return minVisibility + (1 - max(0, dp) / temp) * (maxVisibility - minVisibility)
+
     def FlightLoopCallback(self, elapsedMe, elapsedSim, counter, refcon):
         visibility = XPLMGetDataf(self.VisibilityDataRef)
-        diff = XPLMGetDataf(self.TemperatureSL) - XPLMGetDataf(self.DewPointSL)
+        # Apply a change only if the METAR visibility is higher than 10Km
+        if (visibility < 10000):
+            return 1.0
+        temp = XPLMGetDataf(self.TemperatureSL)
+        dp = XPLMGetDataf(self.DewPointSL)
         elev = XPLMGetDataf(self.ElevatioDataRef) / 0.3
-        if (elev < 8000):
-            if (diff < 5):
-                maxVis = LOW_DPRATIO_VIS
-            elif (diff < 10):
-                maxVis = MEDIUM_DPRATIO_VIS
-            else:
-                maxVis = NORMAL_MAX_VIS
+        if (elev < TRANSITION):
+            maxVis = self.calculateVisibility(LOW_DPRATIO_VIS, NORMAL_MAX_VIS, temp, dp)
         else:
-            if (diff < 5):
-                maxVis = NORMAL_DPRATIO_VIS
-            else:
-                maxVis = HIGH_MAX_VIS
-        if (visibility > maxVis):
+            maxVis = self.calculateVisibility(NORMAL_MAX_VIS, HIGH_MAX_VIS, temp, dp)
+        # Apply this change only if the visibility is changed for more than 500m
+        if (visibility > maxVis and abs(self.LastVisibility - maxVis) > 500):
             # Keep track of the auto weather setting
             self.AutoWeather = XPLMGetDatai(self.RealWeatherDataRef)
-            SandyBarbourPrint(self.Name + ": Vis. was " + str(visibility) + "m -> set it to " + str(maxVis) + "m (diff was " + str(diff) + "°C and elev was " + str(elev) + "feet)")
+            SandyBarbourPrint(self.Name + ": Vis. was " + str(visibility) + "m -> set it to " + str(maxVis) + "m")
             XPLMSetDataf(self.VisibilityDataRef, maxVis)
+            self.LastVisibility = maxVis
             self.SetWeather = 1
             # Setting the visibility disables the auto weather.
             # We can't set the auto weather to on here. We must wait the next loop.

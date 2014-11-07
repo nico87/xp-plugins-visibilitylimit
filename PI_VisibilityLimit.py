@@ -88,17 +88,17 @@ class PythonInterface(object):
     def FlightLoopCallback(self):
         visibility = XPLMGetDataf(self.VisibilityDataRef)
         # Apply a change only if the METAR visibility is higher than 10Km
-        if (visibility < 10000):
+        if visibility < 10000:
             return 1.0
         temp = XPLMGetDataf(self.TemperatureSL)
         dp = XPLMGetDataf(self.DewPointSL)
         elev = XPLMGetDataf(self.ElevatioDataRef) / 0.3
-        if (elev < TRANSITION):
+        if elev < TRANSITION:
             maxVis = self.calculateVisibility(LOW_DPRATIO_VIS, NORMAL_MAX_VIS, temp, dp)
         else:
             maxVis = self.calculateVisibility(NORMAL_MAX_VIS, HIGH_MAX_VIS, temp, dp)
         # Apply this change only if the visibility is changed for more than 500m
-        if (visibility > maxVis and abs(self.LastVisibility - maxVis) > 500):
+        if visibility > maxVis and abs(self.LastVisibility - maxVis) > 500:
             # Keep track of the auto weather setting
             self.AutoWeather = XPLMGetDatai(self.RealWeatherDataRef)
             SandyBarbourPrint(self.Name + ": Vis. was " + str(visibility) + "m -> set it to " + str(maxVis) + "m")
@@ -109,7 +109,7 @@ class PythonInterface(object):
             # We can't set the auto weather to on here. We must wait the next loop.
             # Return 1.0 to indicate that we want to be called again in 1 second.
             return 1.0
-        if (self.SetWeather == 1 and self.AutoWeather == 1):
+        if self.SetWeather == 1 and self.AutoWeather == 1:
             SandyBarbourPrint(self.Name + ": autoweather re-enabled")
             # Reset the auto weather setting
             XPLMSetDatai(self.RealWeatherDataRef, 1)

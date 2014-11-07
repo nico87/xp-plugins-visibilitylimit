@@ -85,7 +85,7 @@ class PythonInterface(object):
     def calculateVisibility(self, minVisibility, maxVisibility, temp, dp):
         return minVisibility + (1 - max(0, dp) / temp) * (maxVisibility - minVisibility)
 
-    def FlightLoopCallback(self, elapsedMe, elapsedSim, counter, refcon):
+    def FlightLoopCallback(self):
         visibility = XPLMGetDataf(self.VisibilityDataRef)
         # Apply a change only if the METAR visibility is higher than 10Km
         if (visibility < 10000):

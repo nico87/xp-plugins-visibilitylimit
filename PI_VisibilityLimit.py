@@ -19,7 +19,7 @@ LOW_DPRATIO_VIS = 18000.0       # meters when difference between temp and dp is 
 TRANSITION = 8000               # transition altitude between HIGH and LOW levels (feet)
 
 
-class PythonInterface:
+class PythonInterface(object):
     """
     XPluginStart
 
